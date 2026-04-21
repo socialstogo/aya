@@ -22,7 +22,7 @@ function priceLabel(level: number) {
 }
 
 export default function VenueCard({ venue, onPress }: VenueCardProps) {
-  const isOpen = true; // TODO: compute from venue.hours
+  const isOpen = venue.isOpen;
 
   return (
     <Pressable

@@ -7,9 +7,11 @@ import {
   Pressable,
   SafeAreaView,
   Image,
+  ActivityIndicator,
 } from 'react-native';
-import { COLORS, MOCK_VENUES } from '../../lib/constants';
+import { COLORS } from '../../lib/constants';
 import { Venue } from '../../lib/types';
+import { useVenues } from '../../hooks/useVenues';
 import VenueProfile from '../../components/VenueProfile';
 
 type SortKey = 'crowd' | 'wait' | 'rating';
@@ -23,10 +25,11 @@ const SORTS: { key: SortKey; label: string }[] = [
 const TAB_BAR_HEIGHT = 90;
 
 export default function TrendingScreen() {
+  const { venues, loading } = useVenues();
   const [sort, setSort] = useState<SortKey>('crowd');
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
 
-  const ranked = [...MOCK_VENUES].sort((a, b) => {
+  const ranked = [...venues].sort((a, b) => {
     if (sort === 'crowd') return b.crowd - a.crowd;
     if (sort === 'wait') return a.wait - b.wait;
     return b.rating - a.rating;
@@ -55,21 +58,27 @@ export default function TrendingScreen() {
         </View>
       </SafeAreaView>
 
-      <FlatList
-        data={ranked}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <TrendingRow
-            venue={item}
-            rank={index + 1}
-            sortKey={sort}
-            onPress={() => setSelectedVenue(item)}
-          />
-        )}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-      />
+      {loading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={COLORS.cream} />
+        </View>
+      ) : (
+        <FlatList
+          data={ranked}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index }) => (
+            <TrendingRow
+              venue={item}
+              rank={index + 1}
+              sortKey={sort}
+              onPress={() => setSelectedVenue(item)}
+            />
+          )}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
+      )}
 
       <VenueProfile
         venue={selectedVenue}
@@ -96,10 +105,9 @@ function TrendingRow({
       ? `${venue.crowd}%`
       : sortKey === 'wait'
       ? venue.wait === 0 ? 'No wait' : `${venue.wait}m`
-      : `${venue.rating.toFixed(1)}`;
+      : venue.rating.toFixed(1);
 
-  const statLabel =
-    sortKey === 'crowd' ? 'crowd' : sortKey === 'wait' ? 'wait' : 'rating';
+  const statLabel = sortKey === 'crowd' ? 'crowd' : sortKey === 'wait' ? 'wait' : 'rating';
 
   return (
     <Pressable
@@ -109,7 +117,7 @@ function TrendingRow({
       <Text style={[styles.rank, rank <= 3 && styles.rankTop]}>{rank}</Text>
       <Image source={{ uri: venue.image }} style={styles.thumb} />
       <View style={styles.rowInfo}>
-        <Text style={styles.rowName}>{venue.name}</Text>
+        <Text style={styles.rowName} numberOfLines={1}>{venue.name}</Text>
         <Text style={styles.rowMeta}>
           {venue.type} · {venue.neighborhood}
         </Text>
@@ -170,6 +178,11 @@ const styles = StyleSheet.create({
   sortTextActive: {
     color: COLORS.darkText,
   },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   list: {
     paddingHorizontal: 16,
     paddingBottom: TAB_BAR_HEIGHT + 20,
@@ -177,7 +190,6 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginVertical: 0,
   },
   row: {
     flexDirection: 'row',

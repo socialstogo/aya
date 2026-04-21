@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
-import { COLORS, MOCK_VENUES, GOOGLE_MAPS_API_KEY } from '../../lib/constants';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { COLORS } from '../../lib/constants';
 import { Venue } from '../../lib/types';
+import { useVenues } from '../../hooks/useVenues';
 import VenueProfile from '../../components/VenueProfile';
 
 const MIAMI = {
@@ -13,6 +14,7 @@ const MIAMI = {
 };
 
 export default function MapScreen() {
+  const { venues, loading } = useVenues();
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
 
   return (
@@ -25,20 +27,29 @@ export default function MapScreen() {
         showsUserLocation
         showsMyLocationButton={false}
       >
-        {MOCK_VENUES.map((venue) => (
+        {venues.map((venue) => (
           <Marker
             key={venue.id}
             coordinate={{ latitude: venue.lat, longitude: venue.lng }}
             onPress={() => setSelectedVenue(venue)}
           >
-            <View style={styles.markerContainer}>
-              <View style={[styles.marker, venue.crowd >= 80 && styles.markerBusy]}>
-                <Text style={styles.markerText}>{venue.crowd}%</Text>
-              </View>
+            <View style={[styles.marker, venue.crowd >= 80 && styles.markerBusy]}>
+              <Text style={[styles.markerText, venue.crowd >= 80 && styles.markerTextBusy]}>
+                {venue.crowd}%
+              </Text>
             </View>
           </Marker>
         ))}
       </MapView>
+
+      {loading && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <View style={styles.loadingPill}>
+            <ActivityIndicator size="small" color={COLORS.cream} />
+            <Text style={styles.loadingText}>Loading venues...</Text>
+          </View>
+        </View>
+      )}
 
       <VenueProfile
         venue={selectedVenue}
@@ -56,9 +67,6 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  markerContainer: {
-    alignItems: 'center',
   },
   marker: {
     backgroundColor: COLORS.cream,
@@ -78,6 +86,32 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 12,
     color: COLORS.darkText,
+  },
+  markerTextBusy: {
+    color: COLORS.white,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  loadingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(13,12,10,0.85)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  loadingText: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13,
+    color: COLORS.cream,
   },
 });
 

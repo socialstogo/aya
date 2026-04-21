@@ -80,6 +80,7 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/liv/800/500',
     hours: 'Thu–Sun 11pm–5am',
     priceLevel: 4,
+    isOpen: true,
   },
   {
     id: '2',
@@ -95,6 +96,7 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/shaker/800/500',
     hours: 'Daily 6pm–2am',
     priceLevel: 3,
+    isOpen: true,
   },
   {
     id: '3',
@@ -110,6 +112,7 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/wynwood/800/500',
     hours: 'Mon–Thu 4pm–12am, Fri–Sun 12pm–2am',
     priceLevel: 2,
+    isOpen: true,
   },
   {
     id: '4',
@@ -125,6 +128,7 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/ball/800/500',
     hours: 'Daily 5pm–3am',
     priceLevel: 2,
+    isOpen: true,
   },
   {
     id: '5',
@@ -140,6 +144,7 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/sugar/800/500',
     hours: 'Daily 5pm–2am',
     priceLevel: 3,
+    isOpen: true,
   },
   {
     id: '6',
@@ -155,6 +160,7 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/eleven/800/500',
     hours: '24 hours',
     priceLevel: 4,
+    isOpen: true,
   },
   {
     id: '7',
@@ -170,6 +176,7 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/kiki/800/500',
     hours: 'Daily 6pm–2am',
     priceLevel: 3,
+    isOpen: true,
   },
   {
     id: '8',
@@ -185,5 +192,6 @@ export const MOCK_VENUES = [
     image: 'https://picsum.photos/seed/basement/800/500',
     hours: 'Fri–Sat 11pm–5am',
     priceLevel: 3,
+    isOpen: true,
   },
 ];

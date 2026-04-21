@@ -12,6 +12,7 @@ export interface Venue {
   image: string;
   hours: string;
   priceLevel: number;
+  isOpen: boolean;
 }
 
 export interface UserProfile {

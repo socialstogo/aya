@@ -7,6 +7,7 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../lib/constants';
@@ -107,8 +108,18 @@ export default function ActivitiesScreen() {
 
 function ActivityRow({ activity }: { activity: (typeof MOCK_ACTIVITIES)[0] }) {
   const icon = CATEGORY_ICONS[activity.category] ?? 'ellipse-outline';
+
+  function openMaps() {
+    const q = encodeURIComponent(`${activity.name} Miami FL`);
+    const apple = `maps:?q=${q}`;
+    const google = `https://www.google.com/maps/search/?q=${q}`;
+    Linking.canOpenURL(apple)
+      .then((ok) => Linking.openURL(ok ? apple : google))
+      .catch(() => Linking.openURL(google));
+  }
+
   return (
-    <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+    <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]} onPress={openMaps}>
       <View style={styles.icon}>
         <Ionicons name={icon} size={18} color={COLORS.cream} />
       </View>
@@ -123,6 +134,7 @@ function ActivityRow({ activity }: { activity: (typeof MOCK_ACTIVITIES)[0] }) {
           <Text style={styles.rating}>{activity.rating.toFixed(1)}</Text>
         </View>
       </View>
+      <Ionicons name="chevron-forward" size={16} color={COLORS.muted} />
     </Pressable>
   );
 }

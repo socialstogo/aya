@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Platform, Text } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { COLORS } from '../../lib/constants';
 import { Venue } from '../../lib/types';
 import { useVenues } from '../../hooks/useVenues';
 import VenueProfile from '../../components/VenueProfile';
 
-// PROVIDER_GOOGLE requires the native Google Maps SDK — only available
-// in Expo Go on Android. iOS Expo Go uses Apple Maps (no custom style).
 const MAP_PROVIDER = Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined;
 
 const MIAMI = {
@@ -16,6 +14,12 @@ const MIAMI = {
   latitudeDelta: 0.12,
   longitudeDelta: 0.08,
 };
+
+function crowdPin(crowd: number) {
+  if (crowd >= 80) return '#ef4444';
+  if (crowd >= 55) return '#f59e0b';
+  return '#22c55e';
+}
 
 export default function MapScreen() {
   const { venues, loading } = useVenues();
@@ -35,14 +39,11 @@ export default function MapScreen() {
           <Marker
             key={venue.id}
             coordinate={{ latitude: venue.lat, longitude: venue.lng }}
+            title={venue.name}
+            description={`${venue.crowd}% crowd · ${venue.isOpen ? 'Open' : 'Closed'}`}
+            pinColor={crowdPin(venue.crowd)}
             onPress={() => setSelectedVenue(venue)}
-          >
-            <View style={[styles.marker, venue.crowd >= 80 && styles.markerBusy]}>
-              <Text style={[styles.markerText, venue.crowd >= 80 && styles.markerTextBusy]}>
-                {venue.crowd}%
-              </Text>
-            </View>
-          </Marker>
+          />
         ))}
       </MapView>
 
@@ -71,28 +72,6 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  marker: {
-    backgroundColor: COLORS.cream,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  markerBusy: {
-    backgroundColor: '#ef4444',
-  },
-  markerText: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 12,
-    color: COLORS.darkText,
-  },
-  markerTextBusy: {
-    color: COLORS.white,
   },
   loadingOverlay: {
     position: 'absolute',

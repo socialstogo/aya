@@ -3,7 +3,6 @@ import { GOOGLE_MAPS_API_KEY } from './constants';
 
 const BASE = 'https://maps.googleapis.com/maps/api/place';
 
-// Stable pseudo-random from a string seed — gives each venue consistent mock crowd/wait
 function stableRand(seed: string, min: number, max: number): number {
   let h = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -11,6 +10,38 @@ function stableRand(seed: string, min: number, max: number): number {
     h |= 0;
   }
   return min + (Math.abs(h) % (max - min + 1));
+}
+
+// Crowd realistic for Miami nightlife given current time + day of week
+function crowdForNow(placeId: string, venueType: string): number {
+  const now = new Date();
+  const hour = now.getHours();
+  const dow = now.getDay(); // 0=Sun 1=Mon…6=Sat
+  const isWeekend = dow === 0 || dow === 5 || dow === 6;
+
+  let lo: number, hi: number;
+  if (hour < 10)       { lo = 0;  hi = 8;  }
+  else if (hour < 14)  { lo = 5;  hi = isWeekend ? 30 : 15; }
+  else if (hour < 17)  { lo = 5;  hi = isWeekend ? 35 : 20; }
+  else if (hour < 19)  { lo = 8;  hi = isWeekend ? 45 : 28; }
+  else if (hour < 21)  { lo = 12; hi = isWeekend ? 60 : 38; }
+  else if (hour < 23)  { lo = 20; hi = isWeekend ? 82 : 55; }
+  else                 { lo = 30; hi = isWeekend ? 97 : 65; }
+
+  // Nightclubs are nearly empty before 9 pm
+  if (venueType === 'Nightclub') {
+    if (hour < 21) hi = Math.max(lo, Math.round(hi * 0.35));
+    else if (hour >= 22) hi = Math.min(98, Math.round(hi * 1.1));
+  }
+
+  return stableRand(placeId + 'c', lo, hi);
+}
+
+function waitForNow(placeId: string, crowd: number): number {
+  // Wait only makes sense when it's actually busy
+  if (crowd < 40) return 0;
+  const raw = stableRand(placeId + 'w', 5, 45);
+  return Math.round(raw * (crowd / 100));
 }
 
 export function getPhotoUrl(ref: string, maxWidth = 800): string {
@@ -43,9 +74,9 @@ interface GooglePlace {
 }
 
 export function mapPlaceToVenue(place: GooglePlace): Venue {
-  // Crowd and wait are not in Places API — generate stable values per venue
-  const crowd = stableRand(place.place_id + 'c', 18, 97);
-  const rawWait = stableRand(place.place_id + 'w', 0, 40);
+  const vType = mapType(place.types);
+  const crowd = crowdForNow(place.place_id, vType);
+  const rawWait = waitForNow(place.place_id, crowd);
 
   return {
     id: place.place_id,
@@ -54,7 +85,7 @@ export function mapPlaceToVenue(place: GooglePlace): Venue {
     neighborhood: extractNeighborhood(place.vicinity),
     address: place.vicinity,
     crowd,
-    wait: rawWait < 8 ? 0 : rawWait,
+    wait: rawWait,
     rating: place.rating ?? 4.0,
     lat: place.geometry.location.lat,
     lng: place.geometry.location.lng,

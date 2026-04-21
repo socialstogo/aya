@@ -2,14 +2,18 @@ import { useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   Pressable,
   ScrollView,
   TextInput,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, AVATAR_COLORS, VIBES, NEIGHBORHOODS, VENUE_TYPES } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 
@@ -21,6 +25,7 @@ export default function OnboardingScreen() {
   const [loading, setLoading] = useState(false);
 
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0]);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
   const [selectedVenueTypes, setSelectedVenueTypes] = useState<string[]>([]);
@@ -46,14 +51,35 @@ export default function OnboardingScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
+    let avatarUrl: string | null = null;
+
+    // Upload photo to Supabase Storage if one was selected
+    if (photoUri) {
+      try {
+        const response = await fetch(photoUri);
+        const blob = await response.blob();
+        const path = `${user.id}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+          avatarUrl = publicUrl;
+        }
+      } catch {
+        // Storage upload failed — fall back to avatar color
+      }
+    }
+
     const { error } = await supabase
       .from('users')
       .update({
         avatar_color: avatarColor,
+        avatar_url: avatarUrl,
         venue_types: selectedVenueTypes,
         neighborhoods: selectedNeighborhoods,
-        instagram_handle: instagram,
-        tiktok_handle: tiktok,
+        instagram_handle: instagram.replace(/^@/, ''),
+        tiktok_handle: tiktok.replace(/^@/, ''),
         onboarding_complete: true,
       })
       .eq('id', user.id);
@@ -71,7 +97,6 @@ export default function OnboardingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Progress bar */}
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` }]} />
       </View>
@@ -81,7 +106,14 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {step === 1 && <StepAvatar color={avatarColor} setColor={setAvatarColor} />}
+        {step === 1 && (
+          <StepAvatar
+            color={avatarColor}
+            setColor={setAvatarColor}
+            photoUri={photoUri}
+            setPhotoUri={setPhotoUri}
+          />
+        )}
         {step === 2 && (
           <StepMultiSelect
             title="What's your vibe?"
@@ -152,20 +184,102 @@ export default function OnboardingScreen() {
   );
 }
 
-function StepAvatar({ color, setColor }: { color: string; setColor: (c: string) => void }) {
+function StepAvatar({
+  color,
+  setColor,
+  photoUri,
+  setPhotoUri,
+}: {
+  color: string;
+  setColor: (c: string) => void;
+  photoUri: string | null;
+  setPhotoUri: (uri: string | null) => void;
+}) {
+  async function pickPhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo access to set a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
+
+  async function takePhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow camera access to take a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
+
   return (
     <View style={stepStyles.container}>
-      <Text style={stepStyles.title}>Choose your color</Text>
-      <Text style={stepStyles.subtitle}>This is how you'll appear on ayá</Text>
+      <Text style={stepStyles.title}>Your profile</Text>
+      <Text style={stepStyles.subtitle}>Add a photo or choose a color</Text>
+
+      {/* Avatar preview */}
       <View style={stepStyles.avatarPreview}>
-        <View style={[stepStyles.avatarCircle, { backgroundColor: color }]} />
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={stepStyles.avatarPhoto} />
+        ) : (
+          <View style={[stepStyles.avatarCircle, { backgroundColor: color }]} />
+        )}
       </View>
+
+      {/* Photo buttons */}
+      <View style={stepStyles.photoRow}>
+        <Pressable
+          style={({ pressed }) => [stepStyles.photoBtn, pressed && { opacity: 0.7 }]}
+          onPress={pickPhoto}
+        >
+          <Ionicons name="image-outline" size={18} color={COLORS.cream} />
+          <Text style={stepStyles.photoBtnText}>Choose Photo</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [stepStyles.photoBtn, pressed && { opacity: 0.7 }]}
+          onPress={takePhoto}
+        >
+          <Ionicons name="camera-outline" size={18} color={COLORS.cream} />
+          <Text style={stepStyles.photoBtnText}>Take Photo</Text>
+        </Pressable>
+        {photoUri && (
+          <Pressable
+            style={({ pressed }) => [stepStyles.photoBtnAlt, pressed && { opacity: 0.7 }]}
+            onPress={() => setPhotoUri(null)}
+          >
+            <Ionicons name="close" size={16} color={COLORS.muted} />
+          </Pressable>
+        )}
+      </View>
+
+      <Text style={stepStyles.orDivider}>— or pick a color —</Text>
+
       <View style={stepStyles.colorGrid}>
         {AVATAR_COLORS.map((c) => (
           <Pressable
             key={c}
-            style={[stepStyles.colorDot, { backgroundColor: c }, color === c && stepStyles.colorDotActive]}
-            onPress={() => setColor(c)}
+            style={[
+              stepStyles.colorDot,
+              { backgroundColor: c },
+              !photoUri && color === c && stepStyles.colorDotActive,
+            ]}
+            onPress={() => { setColor(c); setPhotoUri(null); }}
           />
         ))}
       </View>
@@ -221,29 +335,62 @@ function StepSocials({
   return (
     <View style={stepStyles.container}>
       <Text style={stepStyles.title}>Your socials</Text>
-      <Text style={stepStyles.subtitle}>Optional — link your accounts</Text>
+      <Text style={stepStyles.subtitle}>
+        Shown on your profile — people can tap to visit your pages
+      </Text>
       <View style={stepStyles.socialFields}>
         <View style={styles.field}>
-          <Text style={styles.label}>Instagram</Text>
-          <TextInput
-            style={styles.input}
-            value={instagram}
-            onChangeText={setInstagram}
-            placeholder="@yourhandle"
-            placeholderTextColor={COLORS.muted}
-            autoCapitalize="none"
-          />
+          <View style={styles.labelRow}>
+            <Ionicons name="logo-instagram" size={16} color={COLORS.muted} />
+            <Text style={styles.label}>Instagram</Text>
+          </View>
+          <View style={styles.inputWrap}>
+            <Text style={styles.atSign}>@</Text>
+            <TextInput
+              style={styles.inputInner}
+              value={instagram}
+              onChangeText={setInstagram}
+              placeholder="yourhandle"
+              placeholderTextColor={COLORS.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {instagram.length > 0 && (
+              <Pressable
+                style={styles.openLink}
+                onPress={() => Linking.openURL(`https://instagram.com/${instagram.replace(/^@/, '')}`)}
+              >
+                <Ionicons name="open-outline" size={16} color={COLORS.muted} />
+              </Pressable>
+            )}
+          </View>
         </View>
+
         <View style={styles.field}>
-          <Text style={styles.label}>TikTok</Text>
-          <TextInput
-            style={styles.input}
-            value={tiktok}
-            onChangeText={setTiktok}
-            placeholder="@yourhandle"
-            placeholderTextColor={COLORS.muted}
-            autoCapitalize="none"
-          />
+          <View style={styles.labelRow}>
+            <Ionicons name="logo-tiktok" size={16} color={COLORS.muted} />
+            <Text style={styles.label}>TikTok</Text>
+          </View>
+          <View style={styles.inputWrap}>
+            <Text style={styles.atSign}>@</Text>
+            <TextInput
+              style={styles.inputInner}
+              value={tiktok}
+              onChangeText={setTiktok}
+              placeholder="yourhandle"
+              placeholderTextColor={COLORS.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {tiktok.length > 0 && (
+              <Pressable
+                style={styles.openLink}
+                onPress={() => Linking.openURL(`https://tiktok.com/@${tiktok.replace(/^@/, '')}`)}
+              >
+                <Ionicons name="open-outline" size={16} color={COLORS.muted} />
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -270,7 +417,6 @@ const styles = StyleSheet.create({
   progressBar: {
     height: 3,
     backgroundColor: 'rgba(240,237,228,0.1)',
-    marginHorizontal: 0,
   },
   progressFill: {
     height: '100%',
@@ -330,6 +476,11 @@ const styles = StyleSheet.create({
   field: {
     gap: 8,
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   label: {
     fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 13,
@@ -337,16 +488,31 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
-  input: {
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(240,237,228,0.07)',
     borderRadius: 14,
-    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  atSign: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 16,
+    color: COLORS.muted,
+    paddingLeft: 16,
+  },
+  inputInner: {
+    flex: 1,
+    paddingHorizontal: 8,
     paddingVertical: 16,
     color: COLORS.cream,
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  },
+  openLink: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
 });
 
@@ -369,12 +535,55 @@ const stepStyles = StyleSheet.create({
   },
   avatarPreview: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   avatarCircle: {
     width: 100,
     height: 100,
     borderRadius: 50,
+  },
+  avatarPhoto: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+    justifyContent: 'center',
+  },
+  photoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: 'rgba(240,237,228,0.07)',
+  },
+  photoBtnAlt: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: 'rgba(240,237,228,0.07)',
+  },
+  photoBtnText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 14,
+    color: COLORS.cream,
+  },
+  orDivider: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13,
+    color: COLORS.muted,
+    textAlign: 'center',
+    marginBottom: 24,
   },
   colorGrid: {
     flexDirection: 'row',

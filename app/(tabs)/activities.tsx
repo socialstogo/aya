@@ -8,22 +8,50 @@ import {
   SafeAreaView,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../lib/constants';
 
-const CATEGORIES = ['All', 'Food', 'Art', 'Outdoors', 'Sports', 'Nightlife', 'Shopping'];
+const CATEGORIES = ['All', 'Food', 'Art', 'Outdoors', 'Sports', 'Entertainment', 'Shopping'];
 
 const MOCK_ACTIVITIES = [
-  { id: '1', name: 'Wynwood Walls', category: 'Art', neighborhood: 'Wynwood', distance: '0.8 mi', rating: 4.8 },
-  { id: '2', name: 'Bayside Marketplace', category: 'Shopping', neighborhood: 'Downtown', distance: '1.2 mi', rating: 4.2 },
-  { id: '3', name: 'South Pointe Park', category: 'Outdoors', neighborhood: 'South Beach', distance: '2.4 mi', rating: 4.6 },
-  { id: '4', name: 'Perez Art Museum', category: 'Art', neighborhood: 'Downtown', distance: '1.5 mi', rating: 4.5 },
-  { id: '5', name: 'Miami Beach Boardwalk', category: 'Outdoors', neighborhood: 'South Beach', distance: '3.1 mi', rating: 4.7 },
-  { id: '6', name: 'Calle Ocho Food Tour', category: 'Food', neighborhood: 'Little Havana', distance: '2.2 mi', rating: 4.9 },
-  { id: '7', name: 'Bayfront Park', category: 'Outdoors', neighborhood: 'Downtown', distance: '1.0 mi', rating: 4.4 },
-  { id: '8', name: 'Marlins Park', category: 'Sports', neighborhood: 'Little Havana', distance: '2.8 mi', rating: 4.1 },
+  { id: '1',  name: 'Wynwood Walls',          category: 'Art',           neighborhood: 'Wynwood',       distance: '0.8 mi', rating: 4.8 },
+  { id: '2',  name: 'Miami Escape Room',       category: 'Entertainment', neighborhood: 'Brickell',      distance: '0.7 mi', rating: 4.6 },
+  { id: '3',  name: 'Pottery Miami',           category: 'Entertainment', neighborhood: 'Wynwood',       distance: '1.1 mi', rating: 4.7 },
+  { id: '4',  name: 'Lucky Strike Lanes',      category: 'Entertainment', neighborhood: 'Brickell',      distance: '0.5 mi', rating: 4.2 },
+  { id: '5',  name: 'Calle Ocho Food Tour',    category: 'Food',          neighborhood: 'Little Havana', distance: '2.2 mi', rating: 4.9 },
+  { id: '6',  name: 'Bayfront Park',           category: 'Outdoors',      neighborhood: 'Downtown',      distance: '1.0 mi', rating: 4.4 },
+  { id: '7',  name: 'South Pointe Park',       category: 'Outdoors',      neighborhood: 'South Beach',   distance: '2.4 mi', rating: 4.6 },
+  { id: '8',  name: 'Miami Beach Boardwalk',   category: 'Outdoors',      neighborhood: 'South Beach',   distance: '3.1 mi', rating: 4.7 },
+  { id: '9',  name: 'Perez Art Museum',        category: 'Art',           neighborhood: 'Downtown',      distance: '1.5 mi', rating: 4.5 },
+  { id: '10', name: 'Bayside Marketplace',     category: 'Shopping',      neighborhood: 'Downtown',      distance: '1.2 mi', rating: 4.2 },
+  { id: '11', name: 'Vizcaya Museum',          category: 'Art',           neighborhood: 'Coconut Grove', distance: '4.2 mi', rating: 4.8 },
+  { id: '12', name: 'Whirlyball Miami',        category: 'Sports',        neighborhood: 'Wynwood',       distance: '1.4 mi', rating: 4.5 },
+  { id: '13', name: 'Marlins Park',            category: 'Sports',        neighborhood: 'Little Havana', distance: '2.8 mi', rating: 4.1 },
+  { id: '14', name: 'Wynwood Brewing Co',      category: 'Food',          neighborhood: 'Wynwood',       distance: '0.9 mi', rating: 4.3 },
+  { id: '15', name: 'Coyo Taco Wynwood',       category: 'Food',          neighborhood: 'Wynwood',       distance: '0.8 mi', rating: 4.6 },
+  { id: '16', name: 'The Tank Brewing',        category: 'Food',          neighborhood: 'Wynwood',       distance: '1.2 mi', rating: 4.4 },
+  { id: '17', name: 'Ocean Drive Walk',        category: 'Outdoors',      neighborhood: 'South Beach',   distance: '3.5 mi', rating: 4.9 },
+  { id: '18', name: 'Miami Improv',            category: 'Entertainment', neighborhood: 'Brickell',      distance: '0.6 mi', rating: 4.3 },
+  { id: '19', name: 'Jungle Island',           category: 'Outdoors',      neighborhood: 'Downtown',      distance: '2.0 mi', rating: 4.1 },
+  { id: '20', name: 'Phillip and Patricia Frost Museum of Science', category: 'Art', neighborhood: 'Downtown', distance: '1.8 mi', rating: 4.4 },
+  { id: '21', name: 'Little Havana Food Tour', category: 'Food',          neighborhood: 'Little Havana', distance: '2.5 mi', rating: 4.8 },
+  { id: '22', name: 'Axe Throwing Miami',      category: 'Entertainment', neighborhood: 'Wynwood',       distance: '1.0 mi', rating: 4.5 },
+  { id: '23', name: 'Top Golf Miami',          category: 'Sports',        neighborhood: 'Brickell',      distance: '1.5 mi', rating: 4.6 },
+  { id: '24', name: 'Biscayne Bay Kayak',      category: 'Outdoors',      neighborhood: 'Downtown',      distance: '1.3 mi', rating: 4.7 },
+  { id: '25', name: 'Design District Walk',    category: 'Shopping',      neighborhood: 'Design District', distance: '1.8 mi', rating: 4.5 },
 ];
 
 const TAB_BAR_HEIGHT = 90;
+
+const CATEGORY_ICONS: Record<string, keyof typeof import('@expo/vector-icons').Ionicons.glyphMap> = {
+  All:           'grid-outline',
+  Food:          'restaurant-outline',
+  Art:           'color-palette-outline',
+  Outdoors:      'leaf-outline',
+  Sports:        'football-outline',
+  Entertainment: 'game-controller-outline',
+  Shopping:      'bag-handle-outline',
+};
 
 export default function ActivitiesScreen() {
   const [activeCategory, setActiveCategory] = useState('All');
@@ -37,7 +65,7 @@ export default function ActivitiesScreen() {
       <SafeAreaView>
         <View style={styles.header}>
           <Text style={styles.title}>Activities</Text>
-          <Text style={styles.subtitle}>Things to do nearby</Text>
+          <Text style={styles.subtitle}>Things to do in Miami</Text>
         </View>
         <ScrollView
           horizontal
@@ -51,6 +79,11 @@ export default function ActivitiesScreen() {
               style={[styles.pill, activeCategory === c && styles.pillActive]}
               onPress={() => setActiveCategory(c)}
             >
+              <Ionicons
+                name={CATEGORY_ICONS[c] ?? 'ellipse-outline'}
+                size={13}
+                color={activeCategory === c ? COLORS.darkText : COLORS.muted}
+              />
               <Text style={[styles.pillText, activeCategory === c && styles.pillTextActive]}>
                 {c}
               </Text>
@@ -60,10 +93,11 @@ export default function ActivitiesScreen() {
       </SafeAreaView>
 
       <FlatList
+        style={styles.list}
         data={activities}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ActivityRow activity={item} />}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
@@ -72,10 +106,11 @@ export default function ActivitiesScreen() {
 }
 
 function ActivityRow({ activity }: { activity: (typeof MOCK_ACTIVITIES)[0] }) {
+  const icon = CATEGORY_ICONS[activity.category] ?? 'ellipse-outline';
   return (
     <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       <View style={styles.icon}>
-        <Text style={styles.iconText}>{categoryIcon(activity.category)}</Text>
+        <Ionicons name={icon} size={18} color={COLORS.cream} />
       </View>
       <View style={styles.rowInfo}>
         <Text style={styles.rowName}>{activity.name}</Text>
@@ -83,22 +118,13 @@ function ActivityRow({ activity }: { activity: (typeof MOCK_ACTIVITIES)[0] }) {
       </View>
       <View style={styles.rowRight}>
         <Text style={styles.distance}>{activity.distance}</Text>
-        <Text style={styles.rating}>{activity.rating.toFixed(1)}</Text>
+        <View style={styles.ratingRow}>
+          <Ionicons name="star" size={11} color="#f59e0b" />
+          <Text style={styles.rating}>{activity.rating.toFixed(1)}</Text>
+        </View>
       </View>
     </Pressable>
   );
-}
-
-function categoryIcon(cat: string) {
-  const map: Record<string, string> = {
-    Art: 'A',
-    Food: 'F',
-    Outdoors: 'O',
-    Sports: 'S',
-    Nightlife: 'N',
-    Shopping: 'Sh',
-  };
-  return map[cat] ?? '?';
 }
 
 const styles = StyleSheet.create({
@@ -124,7 +150,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   filtersScroll: {
-    maxHeight: 48,
+    maxHeight: 52,
   },
   filtersContent: {
     paddingHorizontal: 16,
@@ -133,7 +159,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pill: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 100,
     borderWidth: 1,
@@ -153,6 +182,9 @@ const styles = StyleSheet.create({
     color: COLORS.darkText,
   },
   list: {
+    flex: 1,
+  },
+  listContent: {
     paddingHorizontal: 16,
     paddingBottom: TAB_BAR_HEIGHT + 20,
     paddingTop: 8,
@@ -180,11 +212,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  iconText: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 13,
-    color: COLORS.cream,
-  },
   rowInfo: {
     flex: 1,
     gap: 3,
@@ -201,16 +228,21 @@ const styles = StyleSheet.create({
   },
   rowRight: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 3,
   },
   distance: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 13,
     color: COLORS.muted,
   },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
   rating: {
     fontFamily: 'Nunito_700Bold',
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.cream,
   },
 });

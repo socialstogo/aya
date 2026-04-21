@@ -92,7 +92,7 @@ export default function SceneScreen() {
     <View style={styles.container}>
       <SafeAreaView>
         <View style={styles.header}>
-          <Text style={styles.title}>Scene</Text>
+          <Text style={styles.title}>Live Thread</Text>
           <Pressable style={styles.postBtn} onPress={() => setComposeOpen(true)}>
             <Text style={styles.postBtnText}>Post</Text>
           </Pressable>
@@ -168,7 +168,7 @@ function ComposeModal({ open, onClose }: { open: boolean; onClose: () => void })
           <Pressable onPress={onClose}>
             <Text style={composeStyles.cancel}>Cancel</Text>
           </Pressable>
-          <Text style={composeStyles.title}>Share to Scene</Text>
+          <Text style={composeStyles.title}>Share to the thread</Text>
           <Pressable style={composeStyles.submitBtn} onPress={submit}>
             <Text style={composeStyles.submitText}>Post</Text>
           </Pressable>

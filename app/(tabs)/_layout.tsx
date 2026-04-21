@@ -14,7 +14,7 @@ export default function TabLayout() {
       <Tabs.Screen name="trending" options={{ title: 'Trending' }} />
       <Tabs.Screen name="events" options={{ title: 'Events' }} />
       <Tabs.Screen name="activities" options={{ title: 'Activities' }} />
-      <Tabs.Screen name="scene" options={{ title: 'Scene' }} />
+      <Tabs.Screen name="scene" options={{ title: 'Live Thread' }} />
     </Tabs>
   );
 }

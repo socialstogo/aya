@@ -9,7 +9,7 @@ const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inacti
   trending: { active: 'trending-up', inactive: 'trending-up-outline' },
   events: { active: 'calendar', inactive: 'calendar-outline' },
   activities: { active: 'star', inactive: 'star-outline' },
-  scene: { active: 'people', inactive: 'people-outline' },
+  scene: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
 };
 
 export default function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {

@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 
@@ -18,6 +19,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
@@ -62,15 +64,24 @@ export default function LoginScreen() {
 
         <View style={styles.field}>
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Your password"
-            placeholderTextColor={COLORS.muted}
-            secureTextEntry
-            autoComplete="password"
-          />
+          <View style={styles.inputWrap}>
+            <TextInput
+              style={styles.inputInner}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Your password"
+              placeholderTextColor={COLORS.muted}
+              secureTextEntry={!showPassword}
+              autoComplete="password"
+            />
+            <Pressable style={styles.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={COLORS.muted}
+              />
+            </Pressable>
+          </View>
         </View>
 
         <Pressable
@@ -150,6 +161,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(240,237,228,0.07)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  inputInner: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    color: COLORS.cream,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 16,
+  },
+  eyeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   btn: {
     backgroundColor: COLORS.cream,

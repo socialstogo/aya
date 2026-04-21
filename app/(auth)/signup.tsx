@@ -12,8 +12,11 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
+
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -21,7 +24,24 @@ export default function SignupScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
+
+  async function checkUsername(value: string) {
+    const clean = value.toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    if (clean.length < 3) {
+      setUsernameStatus('idle');
+      return;
+    }
+    setUsernameStatus('checking');
+    const { data } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', clean)
+      .maybeSingle();
+    setUsernameStatus(data ? 'taken' : 'available');
+  }
 
   async function handleSignup() {
     if (!fullName || !username || !email || !password) {
@@ -30,6 +50,10 @@ export default function SignupScreen() {
     }
     if (password.length < 6) {
       Alert.alert('Weak password', 'Password must be at least 6 characters.');
+      return;
+    }
+    if (usernameStatus === 'taken') {
+      Alert.alert('Username taken', 'Please choose a different username.');
       return;
     }
 
@@ -46,7 +70,7 @@ export default function SignupScreen() {
         id: data.user.id,
         email,
         full_name: fullName,
-        username: username.toLowerCase().replace(/\s/g, ''),
+        username: username.toLowerCase().replace(/[^a-z0-9_.]/g, ''),
         avatar_color: '#2a2eef',
         onboarding_complete: false,
         followers_count: 0,
@@ -95,15 +119,36 @@ export default function SignupScreen() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Username</Text>
-            <TextInput
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="@handle"
-              placeholderTextColor={COLORS.muted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            <View style={styles.inputWrap}>
+              <TextInput
+                style={styles.inputInner}
+                value={username}
+                onChangeText={(v) => {
+                  setUsername(v);
+                  setUsernameStatus('idle');
+                }}
+                onBlur={() => checkUsername(username)}
+                placeholder="@handle"
+                placeholderTextColor={COLORS.muted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {usernameStatus === 'checking' && (
+                <ActivityIndicator size="small" color={COLORS.muted} style={styles.inputIcon} />
+              )}
+              {usernameStatus === 'available' && (
+                <Ionicons name="checkmark-circle" size={20} color="#22c55e" style={styles.inputIcon} />
+              )}
+              {usernameStatus === 'taken' && (
+                <Ionicons name="close-circle" size={20} color="#ef4444" style={styles.inputIcon} />
+              )}
+            </View>
+            {usernameStatus === 'available' && (
+              <Text style={styles.statusAvailable}>Username is available</Text>
+            )}
+            {usernameStatus === 'taken' && (
+              <Text style={styles.statusTaken}>Username is already taken</Text>
+            )}
           </View>
 
           <View style={styles.field}>
@@ -122,15 +167,24 @@ export default function SignupScreen() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Min. 6 characters"
-              placeholderTextColor={COLORS.muted}
-              secureTextEntry
-              autoComplete="new-password"
-            />
+            <View style={styles.inputWrap}>
+              <TextInput
+                style={styles.inputInner}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Min. 6 characters"
+                placeholderTextColor={COLORS.muted}
+                secureTextEntry={!showPassword}
+                autoComplete="new-password"
+              />
+              <Pressable style={styles.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={COLORS.muted}
+                />
+              </Pressable>
+            </View>
           </View>
 
           <Pressable
@@ -196,7 +250,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   field: {
-    gap: 8,
+    gap: 6,
   },
   label: {
     fontFamily: 'PlusJakartaSans_500Medium',
@@ -215,6 +269,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(240,237,228,0.07)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  inputInner: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    color: COLORS.cream,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 16,
+  },
+  inputIcon: {
+    marginRight: 14,
+  },
+  eyeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  statusAvailable: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12,
+    color: '#22c55e',
+    paddingLeft: 4,
+  },
+  statusTaken: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12,
+    color: '#ef4444',
+    paddingLeft: 4,
   },
   btn: {
     backgroundColor: COLORS.cream,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Dimensions,
   Linking,
   ActivityIndicator,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,10 +19,11 @@ import { COLORS } from '../lib/constants';
 import { Venue } from '../lib/types';
 import { usePlaceDetails } from '../hooks/usePlaceDetails';
 import { useLocation, distanceMi } from '../hooks/useLocation';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import StatChip from './StatChip';
 
 const { width, height } = Dimensions.get('window');
-const HERO_HEIGHT = height * 0.42;
 const SHEET_RADIUS = 24;
 const PHOTO_SIZE = (width - 4) / 2;
 
@@ -37,7 +40,11 @@ function crowdLabel(pct: number) {
   if (pct >= 80) return 'Packed';
   if (pct >= 55) return 'Busy';
   if (pct >= 30) return 'Moderate';
-  return 'Quiet';
+  return 'Chill';
+}
+
+function waitLabel(mins: number) {
+  return mins === 0 ? 'No wait' : `${mins}m`;
 }
 
 function priceLabel(level: number) {
@@ -61,22 +68,64 @@ function Stars({ rating }: { rating: number }) {
 
 export default function VenueProfile({ venue, visible, onClose }: Props) {
   const [liked, setLiked] = useState(false);
+  const [followed, setFollowed] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('Info');
   const insets = useSafeAreaInsets();
   const userCoords = useLocation();
+  const { session } = useAuth();
   const { details, loading: detailsLoading } = usePlaceDetails(visible ? venue?.id ?? null : null);
+
+  // Snap positions for the sheet
+  const COMPACT_TOP = height * 0.40;
+  const EXPANDED_TOP = insets.top + 60;
+  const lastY = useRef(COMPACT_TOP);
+  const sheetY = useRef(new Animated.Value(COMPACT_TOP)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onPanResponderGrant: () => sheetY.stopAnimation(),
+      onPanResponderMove: (_, g) => {
+        const next = Math.max(EXPANDED_TOP, Math.min(COMPACT_TOP, lastY.current + g.dy));
+        sheetY.setValue(next);
+      },
+      onPanResponderRelease: (_, g) => {
+        const shouldExpand = g.dy < -50 || g.vy < -0.5;
+        const target = shouldExpand ? EXPANDED_TOP : COMPACT_TOP;
+        lastY.current = target;
+        Animated.spring(sheetY, {
+          toValue: target,
+          useNativeDriver: false,
+          damping: 18,
+          stiffness: 180,
+          mass: 1,
+        }).start();
+      },
+    })
+  ).current;
+
+  const heroOpacity = sheetY.interpolate({
+    inputRange: [EXPANDED_TOP, COMPACT_TOP],
+    outputRange: [0.15, 1],
+    extrapolate: 'clamp',
+  });
+
+  useEffect(() => {
+    if (visible) {
+      sheetY.setValue(COMPACT_TOP);
+      lastY.current = COMPACT_TOP;
+      setActiveTab('Info');
+    }
+  }, [visible]);
 
   if (!venue) return null;
 
-  const distance =
-    userCoords
-      ? distanceMi(userCoords.lat, userCoords.lng, venue.lat, venue.lng).toFixed(1) + ' mi'
-      : null;
+  const distance = userCoords
+    ? distanceMi(userCoords.lat, userCoords.lng, venue.lat, venue.lng).toFixed(1) + ' mi'
+    : null;
 
   const heroPhotos =
-    details?.photos && details.photos.length > 0
-      ? details.photos
-      : [venue.image];
+    details?.photos && details.photos.length > 0 ? details.photos : [venue.image];
 
   function call() {
     if (details?.formatted_phone_number) {
@@ -85,8 +134,9 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
   }
 
   function openDirections() {
-    const url = details?.maps_url
-      ?? `https://www.google.com/maps/dir/?api=1&destination=${venue.lat},${venue.lng}`;
+    const url =
+      details?.maps_url ??
+      `https://www.google.com/maps/dir/?api=1&destination=${venue.lat},${venue.lng}`;
     Linking.openURL(url);
   }
 
@@ -94,23 +144,61 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
     if (details?.website) Linking.openURL(details.website);
   }
 
+  function openUber() {
+    const uberDeep = `uber://?action=setPickup&dropoff[latitude]=${venue.lat}&dropoff[longitude]=${venue.lng}&dropoff[nickname]=${encodeURIComponent(venue.name)}`;
+    const uberWeb = `https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${venue.lat}&dropoff[longitude]=${venue.lng}&dropoff[nickname]=${encodeURIComponent(venue.name)}`;
+    Linking.canOpenURL(uberDeep).then((ok) => Linking.openURL(ok ? uberDeep : uberWeb));
+  }
+
+  function openLyft() {
+    const lyftDeep = `lyft://ridetype?id=lyft&destination[latitude]=${venue.lat}&destination[longitude]=${venue.lng}`;
+    const lyftWeb = `https://www.lyft.com/ride?destination[lat]=${venue.lat}&destination[lng]=${venue.lng}`;
+    Linking.canOpenURL(lyftDeep).then((ok) => Linking.openURL(ok ? lyftDeep : lyftWeb));
+  }
+
+  async function toggleLike() {
+    const next = !liked;
+    setLiked(next);
+    if (!session) return;
+    const { data: row } = await supabase
+      .from('users')
+      .select('followed_venues')
+      .eq('id', session.user.id)
+      .single();
+    const current: string[] = row?.followed_venues ?? [];
+    const updated = next
+      ? [...current, venue.id]
+      : current.filter((id) => id !== venue.id);
+    await supabase
+      .from('users')
+      .update({ followed_venues: updated })
+      .eq('id', session.user.id);
+  }
+
+  const HERO_HEIGHT = COMPACT_TOP;
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent>
       <View style={styles.root}>
 
-        {/* Hero */}
-        <ScrollView
+        {/* Hero photo gallery */}
+        <Animated.ScrollView
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          style={styles.heroScroll}
+          style={[styles.heroScroll, { height: HERO_HEIGHT, opacity: heroOpacity }]}
         >
           {heroPhotos.map((uri, i) => (
-            <Image key={i} source={{ uri }} style={styles.heroImage} resizeMode="cover" />
+            <Image
+              key={i}
+              source={{ uri }}
+              style={{ width, height: HERO_HEIGHT }}
+              resizeMode="cover"
+            />
           ))}
-        </ScrollView>
+        </Animated.ScrollView>
 
-        {/* Overlay controls */}
+        {/* Back + heart controls */}
         <View style={[styles.controls, { top: insets.top + 8 }]}>
           <Pressable
             style={({ pressed }) => [styles.circleBtn, pressed && { opacity: 0.75 }]}
@@ -120,7 +208,7 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.circleBtn, pressed && { opacity: 0.75 }]}
-            onPress={() => setLiked((l) => !l)}
+            onPress={toggleLike}
           >
             <Ionicons
               name={liked ? 'heart' : 'heart-outline'}
@@ -130,9 +218,13 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
           </Pressable>
         </View>
 
-        {/* White sheet */}
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        {/* Draggable white sheet */}
+        <Animated.View style={[styles.sheet, { top: sheetY }]}>
+
+          {/* Drag handle */}
+          <View style={styles.handleWrap} {...panResponder.panHandlers}>
+            <View style={styles.handle} />
+          </View>
 
           {/* Venue header */}
           <View style={styles.header}>
@@ -141,12 +233,10 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
               <View style={[styles.dot, venue.isOpen ? styles.dotOpen : styles.dotClosed]} />
             </View>
 
-            <View style={styles.metaLine}>
-              <Text style={styles.metaText}>
-                {venue.type} · {venue.neighborhood}
-                {distance ? ` · ${distance}` : ''}
-              </Text>
-            </View>
+            <Text style={styles.metaText}>
+              {venue.type} · {venue.neighborhood}
+              {distance ? ` · ${distance}` : ''}
+            </Text>
 
             <View style={styles.ratingLine}>
               <Stars rating={venue.rating} />
@@ -154,27 +244,44 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
               <Text style={styles.priceText}>{priceLabel(venue.priceLevel)}</Text>
             </View>
 
+            {/* Follow row */}
+            <View style={styles.followRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.followBtn,
+                  followed && styles.followingBtn,
+                  pressed && { opacity: 0.75 },
+                ]}
+                onPress={() => setFollowed((f) => !f)}
+              >
+                <Text style={[styles.followBtnText, followed && styles.followingBtnText]}>
+                  {followed ? 'Following' : 'Follow'}
+                </Text>
+              </Pressable>
+              <View style={styles.followersChip}>
+                <Text style={styles.followersCount}>847</Text>
+                <Text style={styles.followersLabel}>followers</Text>
+              </View>
+            </View>
+
             <View style={styles.chips}>
               <StatChip label="crowd" value={crowdLabel(venue.crowd)} highlight={venue.crowd >= 80} />
-              <StatChip label="wait" value={venue.wait === 0 ? 'No wait' : `${venue.wait}m`} />
+              <StatChip label="wait" value={waitLabel(venue.wait)} />
+              <StatChip label="status" value={venue.isOpen ? 'Open' : 'Closed'} />
             </View>
           </View>
 
           {/* Action buttons */}
-          <View style={styles.actions}>
-            <ActionBtn
-              icon="call"
-              label="Call"
-              disabled={!details?.formatted_phone_number}
-              onPress={call}
-            />
-            <ActionBtn icon="navigate" label="Directions" onPress={openDirections} />
-            <ActionBtn
-              icon="globe-outline"
-              label="Website"
-              disabled={!details?.website}
-              onPress={openWebsite}
-            />
+          <View style={styles.actionsGrid}>
+            <View style={styles.actionsRow}>
+              <ActionBtn icon="call" label="Call" disabled={!details?.formatted_phone_number} onPress={call} />
+              <ActionBtn icon="navigate" label="Directions" onPress={openDirections} />
+              <ActionBtn icon="globe-outline" label="Website" disabled={!details?.website} onPress={openWebsite} />
+            </View>
+            <View style={styles.actionsRow}>
+              <ActionBtn icon="car-outline" label="Ride with Uber" onPress={openUber} />
+              <ActionBtn icon="car-sport-outline" label="Ride with Lyft" onPress={openLyft} />
+            </View>
           </View>
 
           {/* Tabs */}
@@ -209,21 +316,14 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
                 <ActivityIndicator size="small" color="rgba(26,25,24,0.3)" />
               </View>
             )}
-
-            {activeTab === 'Info' && (
-              <InfoTab venue={venue} details={details} />
-            )}
-            {activeTab === 'Photos' && (
-              <PhotosTab photos={details?.photos ?? [venue.image]} />
-            )}
+            {activeTab === 'Info' && <InfoTab venue={venue} details={details} />}
+            {activeTab === 'Photos' && <PhotosTab photos={details?.photos ?? [venue.image]} />}
             {activeTab === 'Reviews' && (
               <ReviewsTab reviews={details?.reviews ?? []} loading={detailsLoading} />
             )}
-            {activeTab === 'Live Thread' && (
-              <EmptyTab message="Be the first to post tonight" />
-            )}
+            {activeTab === 'Live Thread' && <LiveThreadTab venueName={venue.name} />}
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -252,15 +352,52 @@ function ActionBtn({
       onPress={onPress}
       disabled={disabled}
     >
-      <Ionicons name={icon} size={20} color={disabled ? 'rgba(26,25,24,0.3)' : COLORS.darkText} />
-      <Text style={[actionStyles.label, disabled && actionStyles.labelDisabled]}>{label}</Text>
+      <Ionicons name={icon} size={18} color={disabled ? 'rgba(26,25,24,0.3)' : COLORS.darkText} />
+      <Text style={[actionStyles.label, disabled && actionStyles.labelDisabled]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
-function InfoTab({ venue, details }: { venue: Venue; details: ReturnType<typeof usePlaceDetails>['details'] }) {
+function InfoTab({
+  venue,
+  details,
+}: {
+  venue: Venue;
+  details: ReturnType<typeof usePlaceDetails>['details'];
+}) {
   return (
     <View style={infoStyles.container}>
+      {/* Live Now card */}
+      <View style={infoStyles.liveCard}>
+        <Text style={infoStyles.liveTitle}>LIVE RIGHT NOW</Text>
+        <View style={infoStyles.liveGrid}>
+          <View style={infoStyles.liveStat}>
+            <Text style={infoStyles.liveStatLabel}>Wait</Text>
+            <Text style={infoStyles.liveStatValue}>{waitLabel(venue.wait)}</Text>
+          </View>
+          <View style={infoStyles.liveStat}>
+            <Text style={infoStyles.liveStatLabel}>Crowd</Text>
+            <Text style={infoStyles.liveStatValue}>{crowdLabel(venue.crowd)}</Text>
+          </View>
+          <View style={infoStyles.liveStat}>
+            <Text style={infoStyles.liveStatLabel}>Price</Text>
+            <Text style={infoStyles.liveStatValue}>{priceLabel(venue.priceLevel)}</Text>
+          </View>
+          <View style={infoStyles.liveStat}>
+            <Text style={infoStyles.liveStatLabel}>Status</Text>
+            <Text style={[infoStyles.liveStatValue, venue.isOpen && infoStyles.openText]}>
+              {venue.isOpen ? 'Open' : 'Closed'}
+            </Text>
+          </View>
+        </View>
+        <View style={infoStyles.crowdBarBg}>
+          <View style={[infoStyles.crowdBarFill, { width: `${venue.crowd}%` as any }]} />
+        </View>
+        <Text style={infoStyles.crowdPct}>{venue.crowd}%</Text>
+      </View>
+
       {details?.formatted_address && (
         <InfoRow label="Address" value={details.formatted_address} />
       )}
@@ -293,6 +430,17 @@ function InfoTab({ venue, details }: { venue: Venue; details: ReturnType<typeof 
           <InfoRow label="Type" value={venue.type} />
         </>
       )}
+
+      {/* Claim venue */}
+      <Pressable
+        style={({ pressed }) => [infoStyles.claimBtn, pressed && { opacity: 0.75 }]}
+        onPress={() =>
+          Linking.openURL('mailto:venues@ayaapp.io?subject=Claim%20My%20Venue')
+        }
+      >
+        <Ionicons name="business-outline" size={16} color="rgba(26,25,24,0.4)" />
+        <Text style={infoStyles.claimText}>Own this venue? Claim your profile</Text>
+      </Pressable>
     </View>
   );
 }
@@ -308,7 +456,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function PhotosTab({ photos }: { photos: string[] }) {
   if (photos.length === 0) return <EmptyTab message="No photos yet" />;
-
   return (
     <View style={photoStyles.grid}>
       {photos.map((uri, i) => (
@@ -327,7 +474,6 @@ function ReviewsTab({
 }) {
   if (loading) return null;
   if (reviews.length === 0) return <EmptyTab message="No reviews yet" />;
-
   return (
     <View style={reviewStyles.container}>
       {reviews.map((r, i) => (
@@ -357,6 +503,37 @@ function ReviewsTab({
   );
 }
 
+function LiveThreadTab({ venueName }: { venueName: string }) {
+  const MOCK_THREAD = [
+    { id: '1', author: 'Sofia M.', color: '#2a2eef', time: '8m ago', text: 'Vibe is incredible right now, DJ just dropped 🔥' },
+    { id: '2', author: 'Nico R.',  color: '#ef2a6a', time: '15m ago', text: 'No line outside, walked right in.' },
+    { id: '3', author: 'Diego F.', color: '#efb82a', time: '32m ago', text: 'Drinks are strong tonight. Worth it.' },
+  ];
+
+  return (
+    <View style={threadStyles.container}>
+      {MOCK_THREAD.map((post) => (
+        <View key={post.id} style={threadStyles.post}>
+          <View style={[threadStyles.avatar, { backgroundColor: post.color }]}>
+            <Text style={threadStyles.avatarInit}>{post.author.charAt(0)}</Text>
+          </View>
+          <View style={threadStyles.postBody}>
+            <View style={threadStyles.postTop}>
+              <Text style={threadStyles.author}>{post.author}</Text>
+              <Text style={threadStyles.time}>{post.time}</Text>
+            </View>
+            <Text style={threadStyles.postText}>{post.text}</Text>
+          </View>
+        </View>
+      ))}
+      <Pressable style={threadStyles.postBtn}>
+        <Ionicons name="create-outline" size={16} color="rgba(26,25,24,0.5)" />
+        <Text style={threadStyles.postBtnText}>What's happening at {venueName}?</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function EmptyTab({ message }: { message: string }) {
   return (
     <View style={{ paddingTop: 48, alignItems: 'center' }}>
@@ -379,11 +556,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: HERO_HEIGHT,
-  },
-  heroImage: {
-    width,
-    height: HERO_HEIGHT,
   },
   controls: {
     position: 'absolute',
@@ -412,24 +584,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    top: HERO_HEIGHT - SHEET_RADIUS,
     backgroundColor: COLORS.white,
     borderTopLeftRadius: SHEET_RADIUS,
     borderTopRightRadius: SHEET_RADIUS,
+  },
+  handleWrap: {
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 2,
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   header: {
     paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 14,
+    paddingBottom: 12,
     gap: 7,
   },
   nameLine: {
@@ -439,23 +610,22 @@ const styles = StyleSheet.create({
   },
   name: {
     fontFamily: 'Nunito_800ExtraBold',
-    fontSize: 26,
+    fontSize: 24,
     color: COLORS.darkText,
     flex: 1,
-    lineHeight: 32,
+    lineHeight: 30,
   },
   dot: {
     width: 9,
     height: 9,
     borderRadius: 5,
-    marginTop: 11,
+    marginTop: 10,
   },
-  dotOpen: { backgroundColor: '#22c55e' },
+  dotOpen:   { backgroundColor: '#22c55e' },
   dotClosed: { backgroundColor: '#ef4444' },
-  metaLine: {},
   metaText: {
     fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(26,25,24,0.5)',
   },
   ratingLine: {
@@ -474,15 +644,60 @@ const styles = StyleSheet.create({
     color: 'rgba(26,25,24,0.4)',
     marginLeft: 'auto',
   },
+  followRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  followBtn: {
+    flex: 1,
+    backgroundColor: COLORS.darkText,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  followingBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(26,25,24,0.2)',
+  },
+  followBtnText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 14,
+    color: COLORS.white,
+  },
+  followingBtnText: {
+    color: 'rgba(26,25,24,0.5)',
+  },
+  followersChip: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(26,25,24,0.06)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  followersCount: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: COLORS.darkText,
+  },
+  followersLabel: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 11,
+    color: 'rgba(26,25,24,0.4)',
+  },
   chips: {
     flexDirection: 'row',
     gap: 8,
   },
-  actions: {
-    flexDirection: 'row',
+  actionsGrid: {
     paddingHorizontal: 22,
-    paddingBottom: 14,
-    gap: 10,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
   tabsRow: {
     paddingHorizontal: 18,
@@ -500,7 +715,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(26,25,24,0.45)',
   },
   tabTextActive: {
@@ -516,7 +731,7 @@ const styles = StyleSheet.create({
   },
   contentInner: {
     paddingHorizontal: 22,
-    paddingTop: 20,
+    paddingTop: 18,
     paddingBottom: 48,
   },
   detailsLoading: {
@@ -531,20 +746,21 @@ const actionStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: 'rgba(26,25,24,0.05)',
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: 'rgba(26,25,24,0.08)',
   },
   btnDisabled: {
-    opacity: 0.35,
+    opacity: 0.3,
   },
   label: {
     fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.darkText,
+    textAlign: 'center',
   },
   labelDisabled: {
     color: 'rgba(26,25,24,0.35)',
@@ -555,6 +771,57 @@ const infoStyles = StyleSheet.create({
   container: {
     gap: 20,
   },
+  liveCard: {
+    backgroundColor: 'rgba(26,25,24,0.05)',
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  liveTitle: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 10,
+    color: 'rgba(26,25,24,0.4)',
+    letterSpacing: 1.2,
+  },
+  liveGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  liveStat: {
+    width: '45%',
+    gap: 2,
+  },
+  liveStatLabel: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12,
+    color: 'rgba(26,25,24,0.4)',
+  },
+  liveStatValue: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 15,
+    color: COLORS.darkText,
+  },
+  openText: {
+    color: '#22c55e',
+  },
+  crowdBarBg: {
+    height: 4,
+    backgroundColor: 'rgba(26,25,24,0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  crowdBarFill: {
+    height: 4,
+    backgroundColor: '#22c55e',
+    borderRadius: 2,
+  },
+  crowdPct: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: '#22c55e',
+    textAlign: 'right',
+  },
   row: {
     gap: 4,
   },
@@ -564,7 +831,7 @@ const infoStyles = StyleSheet.create({
     color: 'rgba(26,25,24,0.4)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   value: {
     fontFamily: 'PlusJakartaSans_400Regular',
@@ -595,13 +862,29 @@ const infoStyles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
   },
+  claimBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(26,25,24,0.15)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  claimText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 14,
+    color: 'rgba(26,25,24,0.45)',
+  },
 });
 
 const photoStyles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -22, // bleed to sheet edges
+    marginHorizontal: -22,
     gap: 2,
   },
   photo: {
@@ -662,5 +945,70 @@ const reviewStyles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(26,25,24,0.75)',
     lineHeight: 21,
+  },
+});
+
+const threadStyles = StyleSheet.create({
+  container: {
+    gap: 16,
+  },
+  post: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarInit: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 14,
+    color: COLORS.white,
+  },
+  postBody: {
+    flex: 1,
+    gap: 4,
+  },
+  postTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  author: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: COLORS.darkText,
+  },
+  time: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 11,
+    color: 'rgba(26,25,24,0.4)',
+  },
+  postText: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 14,
+    color: 'rgba(26,25,24,0.75)',
+    lineHeight: 20,
+  },
+  postBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(26,25,24,0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  postBtnText: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 14,
+    color: 'rgba(26,25,24,0.4)',
+    flex: 1,
   },
 });

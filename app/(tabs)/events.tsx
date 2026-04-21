@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,134 +7,177 @@ import {
   Pressable,
   SafeAreaView,
   Linking,
+  Image,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../lib/constants';
-
-type DateFilter = 'Tonight' | 'Tomorrow' | 'This weekend';
-
-const DATE_FILTERS: DateFilter[] = ['Tonight', 'Tomorrow', 'This weekend'];
-
-const MOCK_EVENTS = [
-  {
-    id: '1',
-    name: 'Latin Night at Ball & Chain',
-    venue: 'Ball & Chain',
-    neighborhood: 'Little Havana',
-    date: 'Tonight · 10pm',
-    price: '$15',
-    genre: 'Latin',
-    url: null,
-    dateKey: 'Tonight',
-  },
-  {
-    id: '2',
-    name: 'Open Format DJ Set',
-    venue: 'LIV Miami',
-    neighborhood: 'South Beach',
-    date: 'Tonight · 11pm',
-    price: '$40',
-    genre: 'Electronic',
-    url: null,
-    dateKey: 'Tonight',
-  },
-  {
-    id: '3',
-    name: 'Reggaeton Fridays',
-    venue: 'E11EVEN Miami',
-    neighborhood: 'Downtown',
-    date: 'Tomorrow · 11pm',
-    price: '$30',
-    genre: 'Reggaeton',
-    url: null,
-    dateKey: 'Tomorrow',
-  },
-  {
-    id: '4',
-    name: 'Rooftop Jazz Night',
-    venue: 'Sugar (East Hotel)',
-    neighborhood: 'Brickell',
-    date: 'Sat · 8pm',
-    price: 'Free',
-    genre: 'Jazz',
-    url: null,
-    dateKey: 'This weekend',
-  },
-  {
-    id: '5',
-    name: 'Afrobeats & Chill',
-    venue: 'Kiki on the River',
-    neighborhood: 'Wynwood',
-    date: 'Sat · 9pm',
-    price: '$10',
-    genre: 'Afrobeats',
-    url: null,
-    dateKey: 'This weekend',
-  },
-];
+import { AppEvent } from '../../lib/events';
+import { useEvents } from '../../hooks/useEvents';
 
 const TAB_BAR_HEIGHT = 90;
 
-export default function EventsScreen() {
-  const [activeFilter, setActiveFilter] = useState<DateFilter>('Tonight');
+// Generate next 30 days starting from today
+function buildDateStrip(count = 30) {
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split('T')[0];
+    const dayLabel = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : d.toLocaleDateString('en-US', { weekday: 'short' });
+    const numLabel = String(d.getDate());
+    const monthLabel = d.toLocaleDateString('en-US', { month: 'short' });
+    return { dateStr, dayLabel, numLabel, monthLabel };
+  });
+}
 
-  const events = MOCK_EVENTS.filter((e) => e.dateKey === activeFilter);
+const DATE_STRIP = buildDateStrip();
+
+const SOURCE_COLORS: Record<string, string> = {
+  ticketmaster: '#026cdf',
+  eventbrite:   '#f05537',
+};
+
+export default function EventsScreen() {
+  const [selectedDate, setSelectedDate] = useState(DATE_STRIP[0].dateStr);
+  const stripRef = useRef<ScrollView>(null);
+  const { events, loading, error } = useEvents(selectedDate);
+
+  const selectedMeta = DATE_STRIP.find((d) => d.dateStr === selectedDate)!;
 
   return (
     <View style={styles.container}>
       <SafeAreaView>
         <View style={styles.header}>
           <Text style={styles.title}>Events</Text>
+          <Text style={styles.subtitle}>Miami · {selectedMeta.dayLabel} {selectedMeta.numLabel} {selectedMeta.monthLabel}</Text>
         </View>
-        <View style={styles.filterRow}>
-          {DATE_FILTERS.map((f) => (
-            <Pressable
-              key={f}
-              style={[styles.filterPill, activeFilter === f && styles.filterPillActive]}
-              onPress={() => setActiveFilter(f)}
-            >
-              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
-                {f}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+
+        {/* Date strip */}
+        <ScrollView
+          ref={stripRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.stripContent}
+          style={styles.strip}
+        >
+          {DATE_STRIP.map((d) => {
+            const active = d.dateStr === selectedDate;
+            return (
+              <Pressable
+                key={d.dateStr}
+                style={[styles.dateCell, active && styles.dateCellActive]}
+                onPress={() => setSelectedDate(d.dateStr)}
+              >
+                <Text style={[styles.dateDayLabel, active && styles.dateLabelActive]}>
+                  {d.dayLabel}
+                </Text>
+                <Text style={[styles.dateNum, active && styles.dateLabelActive]}>
+                  {d.numLabel}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </SafeAreaView>
 
-      <FlatList
-        data={events}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <EventCard event={item} />}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No events found</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.cream} />
+          <Text style={styles.loadingText}>Loading events…</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Ionicons name="alert-circle-outline" size={40} color={COLORS.muted} />
+          <Text style={styles.emptyText}>Couldn't load events</Text>
+          <Text style={styles.emptySubtext}>{error}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={events}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <EventCard event={item} />}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<EmptyState date={selectedMeta.dayLabel} />}
+        />
+      )}
     </View>
   );
 }
 
-function EventCard({ event }: { event: (typeof MOCK_EVENTS)[0] }) {
+function EventCard({ event }: { event: AppEvent }) {
+  function openTickets() {
+    if (event.ticketUrl) Linking.openURL(event.ticketUrl);
+  }
+
   return (
-    <View style={styles.card}>
-      <View style={styles.cardTop}>
-        <View style={styles.genreBadge}>
-          <Text style={styles.genreText}>{event.genre}</Text>
+    <View style={cardStyles.card}>
+      {event.imageUrl ? (
+        <Image source={{ uri: event.imageUrl }} style={cardStyles.image} resizeMode="cover" />
+      ) : (
+        <View style={[cardStyles.imagePlaceholder, { backgroundColor: genreColor(event.genre) }]}>
+          <Text style={cardStyles.placeholderText}>{event.genre}</Text>
         </View>
-        <Text style={styles.price}>{event.price}</Text>
-      </View>
-      <Text style={styles.eventName}>{event.name}</Text>
-      <Text style={styles.venueName}>{event.venue}</Text>
-      <View style={styles.cardBottom}>
-        <Text style={styles.dateText}>{event.date} · {event.neighborhood}</Text>
-        <Pressable style={styles.ticketBtn}>
-          <Text style={styles.ticketBtnText}>Tickets</Text>
+      )}
+
+      <View style={cardStyles.body}>
+        <View style={cardStyles.topRow}>
+          <View style={[cardStyles.sourceBadge, { backgroundColor: SOURCE_COLORS[event.source] + '22' }]}>
+            <Text style={[cardStyles.sourceText, { color: SOURCE_COLORS[event.source] }]}>
+              {event.source === 'ticketmaster' ? 'Ticketmaster' : 'Eventbrite'}
+            </Text>
+          </View>
+          <Text style={cardStyles.price}>{event.price}</Text>
+        </View>
+
+        <Text style={cardStyles.name} numberOfLines={2}>{event.name}</Text>
+
+        <View style={cardStyles.metaRow}>
+          <Ionicons name="location-outline" size={13} color={COLORS.muted} />
+          <Text style={cardStyles.metaText} numberOfLines={1}>{event.venue}</Text>
+        </View>
+
+        <View style={cardStyles.metaRow}>
+          <Ionicons name="time-outline" size={13} color={COLORS.muted} />
+          <Text style={cardStyles.metaText}>{event.date}{event.time ? ` · ${event.time}` : ''}</Text>
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [cardStyles.ticketBtn, pressed && { opacity: 0.75 }]}
+          onPress={openTickets}
+        >
+          <Ionicons name="ticket-outline" size={15} color={COLORS.darkText} />
+          <Text style={cardStyles.ticketBtnText}>Get Tickets</Text>
+          <Ionicons name="arrow-forward" size={14} color={COLORS.darkText} />
         </Pressable>
       </View>
     </View>
   );
+}
+
+function EmptyState({ date }: { date: string }) {
+  return (
+    <View style={styles.center}>
+      <Ionicons name="calendar-outline" size={48} color={COLORS.muted} />
+      <Text style={styles.emptyText}>No events found for {date}</Text>
+      <Text style={styles.emptySubtext}>Try a different date or check back later</Text>
+    </View>
+  );
+}
+
+function genreColor(genre: string): string {
+  const map: Record<string, string> = {
+    'Hip-Hop/Rap': '#7c3aed',
+    'Electronic':  '#2a2eef',
+    'Latin':       '#ef4444',
+    'Rock':        '#dc2626',
+    'Jazz':        '#d97706',
+    'R&B':         '#db2777',
+    'Pop':         '#0891b2',
+    'Reggaeton':   '#16a34a',
+  };
+  return map[genre] ?? '#333';
 }
 
 const styles = StyleSheet.create({
@@ -145,7 +188,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 2,
   },
   title: {
     fontFamily: 'Nunito_800ExtraBold',
@@ -153,107 +196,160 @@ const styles = StyleSheet.create({
     color: COLORS.cream,
     letterSpacing: -0.5,
   },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+  subtitle: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 13,
+    color: COLORS.muted,
+    marginTop: 2,
   },
-  filterPill: {
+  strip: {
+    maxHeight: 76,
+  },
+  stripContent: {
     paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    alignItems: 'center',
+  },
+  dateCell: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 100,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: 'rgba(240,237,228,0.05)',
+    minWidth: 52,
   },
-  filterPillActive: {
+  dateCellActive: {
     backgroundColor: COLORS.cream,
     borderColor: COLORS.cream,
   },
-  filterText: {
+  dateDayLabel: {
     fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 14,
+    fontSize: 11,
     color: COLORS.muted,
   },
-  filterTextActive: {
+  dateNum: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 18,
+    color: COLORS.cream,
+    marginTop: 1,
+  },
+  dateLabelActive: {
     color: COLORS.darkText,
   },
   list: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    gap: 12,
+    paddingTop: 8,
+    gap: 14,
     paddingBottom: TAB_BAR_HEIGHT + 20,
   },
-  card: {
-    backgroundColor: 'rgba(240,237,228,0.05)',
-    borderRadius: 18,
-    padding: 18,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  center: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 40,
   },
-  genreBadge: {
-    backgroundColor: 'rgba(42,46,239,0.15)',
-    borderRadius: 100,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  genreText: {
-    fontFamily: 'PlusJakartaSans_500Medium',
-    fontSize: 12,
-    color: COLORS.blue,
-  },
-  price: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 14,
-    color: COLORS.cream,
-  },
-  eventName: {
-    fontFamily: 'Nunito_700Bold',
-    fontSize: 18,
-    color: COLORS.cream,
-  },
-  venueName: {
+  loadingText: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 14,
     color: COLORS.muted,
   },
-  cardBottom: {
+  emptyText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 18,
+    color: COLORS.cream,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 14,
+    color: COLORS.muted,
+    textAlign: 'center',
+  },
+});
+
+const cardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(240,237,228,0.05)',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  image: {
+    width: '100%',
+    height: 160,
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 1,
+  },
+  body: {
+    padding: 16,
+    gap: 8,
+  },
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
   },
-  dateText: {
+  sourceBadge: {
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  sourceText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 11,
+  },
+  price: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 15,
+    color: COLORS.cream,
+  },
+  name: {
+    fontFamily: 'Nunito_700Bold',
+    fontSize: 18,
+    color: COLORS.cream,
+    lineHeight: 24,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaText: {
     fontFamily: 'PlusJakartaSans_400Regular',
     fontSize: 13,
     color: COLORS.muted,
     flex: 1,
   },
   ticketBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: COLORS.cream,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingVertical: 11,
+    marginTop: 4,
   },
   ticketBtnText: {
     fontFamily: 'PlusJakartaSans_600SemiBold',
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.darkText,
-  },
-  empty: {
-    paddingTop: 80,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: 'PlusJakartaSans_400Regular',
-    fontSize: 15,
-    color: COLORS.muted,
+    flex: 1,
+    textAlign: 'center',
   },
 });

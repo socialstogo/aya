@@ -4,7 +4,6 @@
     "slug": "aya",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "backgroundColor": "#0d0c0a"
@@ -13,16 +12,21 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "io.vayaapp.aya",
+      "config": {
+        "googleMapsApiKey": "AIzaSyDKPS1qgKmSogsEV2g4MJarBY6bmy2oLM8"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "ayá uses your location to show nearby venues"
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#0d0c0a"
-      },
       "package": "io.vayaapp.aya",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDKPS1qgKmSogsEV2g4MJarBY6bmy2oLM8"
+        }
+      }
     },
     "web": {
       "bundler": "metro"

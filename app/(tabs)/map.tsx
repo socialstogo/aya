@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { COLORS } from '../../lib/constants';
 import { Venue } from '../../lib/types';
 import { useVenues } from '../../hooks/useVenues';
 import VenueProfile from '../../components/VenueProfile';
+
+// PROVIDER_GOOGLE requires the native Google Maps SDK — only available
+// in Expo Go on Android. iOS Expo Go uses Apple Maps (no custom style).
+const MAP_PROVIDER = Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined;
 
 const MIAMI = {
   latitude: 25.7879,
@@ -21,9 +25,9 @@ export default function MapScreen() {
     <View style={styles.container}>
       <MapView
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
+        provider={MAP_PROVIDER}
         initialRegion={MIAMI}
-        customMapStyle={darkMapStyle}
+        customMapStyle={MAP_PROVIDER ? darkMapStyle : undefined}
         showsUserLocation
         showsMyLocationButton={false}
       >

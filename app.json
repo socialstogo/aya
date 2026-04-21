@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "ayá",
+    "slug": "aya",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0d0c0a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "io.vayaapp.aya",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ayá uses your location to show nearby venues"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0d0c0a"
+      },
+      "package": "io.vayaapp.aya",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ayá uses your location to show nearby venues"
+        }
+      ]
+    ],
+    "scheme": "aya",
+    "extra": {
+      "GOOGLE_MAPS_API_KEY": "AIzaSyDKPS1qgKmSogsEV2g4MJarBY6bmy2oLM8"
+    }
+  }
+}

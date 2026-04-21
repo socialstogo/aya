@@ -44,3 +44,24 @@ export interface ScenePost {
 }
 
 export type FilterType = 'All' | 'Bar' | 'Nightclub' | 'Restaurant' | 'Rooftop' | 'Live Music';
+
+export interface PlaceReview {
+  author_name: string;
+  rating: number;
+  relative_time_description: string;
+  text: string;
+  profile_photo_url?: string;
+}
+
+export interface PlaceDetails {
+  formatted_address: string;
+  formatted_phone_number?: string;
+  website?: string;
+  maps_url?: string;
+  opening_hours?: {
+    open_now: boolean;
+    weekday_text: string[];
+  };
+  photos: string[];
+  reviews?: PlaceReview[];
+}

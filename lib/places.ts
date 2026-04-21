@@ -1,4 +1,4 @@
-import { Venue } from './types';
+import { Venue, PlaceDetails } from './types';
 import { GOOGLE_MAPS_API_KEY } from './constants';
 
 const BASE = 'https://maps.googleapis.com/maps/api/place';
@@ -115,4 +115,68 @@ export async function fetchNearbyVenues(lat: number, lng: number): Promise<Venue
 
   cache[key] = { venues, at: Date.now() };
   return venues;
+}
+
+// Place Details — fetches rich info for a single venue
+const detailsCache: Record<string, { data: PlaceDetails; at: number }> = {};
+
+const DETAIL_FIELDS = [
+  'formatted_address',
+  'formatted_phone_number',
+  'website',
+  'url',
+  'opening_hours',
+  'photos',
+  'reviews',
+].join(',');
+
+export async function fetchPlaceDetails(placeId: string): Promise<PlaceDetails> {
+  const cached = detailsCache[placeId];
+  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.data;
+
+  const params = new URLSearchParams({
+    place_id: placeId,
+    fields: DETAIL_FIELDS,
+    key: GOOGLE_MAPS_API_KEY,
+  });
+
+  const res = await fetch(`${BASE}/details/json?${params}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+
+  if (json.status !== 'OK') throw new Error(`Place Details: ${json.status}`);
+
+  const r = json.result;
+
+  const details: PlaceDetails = {
+    formatted_address: r.formatted_address ?? '',
+    formatted_phone_number: r.formatted_phone_number,
+    website: r.website,
+    maps_url: r.url,
+    opening_hours: r.opening_hours
+      ? {
+          open_now: r.opening_hours.open_now ?? false,
+          weekday_text: r.opening_hours.weekday_text ?? [],
+        }
+      : undefined,
+    photos: (r.photos ?? [])
+      .slice(0, 10)
+      .map((p: { photo_reference: string }) => getPhotoUrl(p.photo_reference, 800)),
+    reviews: (r.reviews ?? []).map((rv: {
+      author_name: string;
+      rating: number;
+      relative_time_description: string;
+      text: string;
+      profile_photo_url?: string;
+    }) => ({
+      author_name: rv.author_name,
+      rating: rv.rating,
+      relative_time_description: rv.relative_time_description,
+      text: rv.text,
+      profile_photo_url: rv.profile_photo_url,
+    })),
+  };
+
+  detailsCache[placeId] = { data: details, at: Date.now() };
+  return details;
 }

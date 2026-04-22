@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { COLORS } from '../../lib/constants';
 import { Venue, FilterType } from '../../lib/types';
 import { useVenues } from '../../hooks/useVenues';
@@ -88,7 +89,7 @@ export default function DiscoverScreen() {
             {locationDenied && (
               <Text style={styles.locationNote}>Miami, FL</Text>
             )}
-            <Pressable style={styles.iconBtn}>
+            <Pressable style={styles.iconBtn} onPress={() => router.push('/notifications')}>
               <Ionicons name="notifications-outline" size={22} color={COLORS.cream} />
               <View style={styles.notifDot} />
             </Pressable>
@@ -255,7 +256,13 @@ function ProfileMenu({
             ]}
             onPress={() => {
               onClose();
-              Alert.alert(item.label, 'Coming soon');
+              if (item.id === 'profile') {
+                router.push('/profile');
+              } else if (item.id === 'notifications') {
+                router.push('/notifications');
+              } else {
+                Alert.alert(item.label, 'Coming soon');
+              }
             }}
           >
             <Ionicons name={item.icon as any} size={20} color={COLORS.cream} />

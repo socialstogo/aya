@@ -20,10 +20,13 @@ export interface UserProfile {
   email: string;
   full_name: string;
   username: string;
-  bio: string;
+  bio?: string;
   avatar_color: string;
-  instagram_handle: string;
-  tiktok_handle: string;
+  avatar_url?: string;
+  instagram_handle?: string;
+  tiktok_handle?: string;
+  followers_count: number;
+  following_count: number;
   venue_types: string[];
   neighborhoods: string[];
   followed_venues: string[];

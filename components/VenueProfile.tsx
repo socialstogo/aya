@@ -75,9 +75,13 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
   const { session } = useAuth();
   const { details, loading: detailsLoading } = usePlaceDetails(visible ? venue?.id ?? null : null);
 
-  // Snap positions for the sheet
   const COMPACT_TOP = height * 0.40;
   const EXPANDED_TOP = insets.top + 60;
+
+  // Keep snap positions in refs so PanResponder closures always read current values
+  const snapRef = useRef({ compact: COMPACT_TOP, expanded: EXPANDED_TOP });
+  snapRef.current = { compact: COMPACT_TOP, expanded: EXPANDED_TOP };
+
   const lastY = useRef(COMPACT_TOP);
   const sheetY = useRef(new Animated.Value(COMPACT_TOP)).current;
 
@@ -86,12 +90,14 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
       onPanResponderGrant: () => sheetY.stopAnimation(),
       onPanResponderMove: (_, g) => {
-        const next = Math.max(EXPANDED_TOP, Math.min(COMPACT_TOP, lastY.current + g.dy));
+        const { compact, expanded } = snapRef.current;
+        const next = Math.max(expanded, Math.min(compact, lastY.current + g.dy));
         sheetY.setValue(next);
       },
       onPanResponderRelease: (_, g) => {
+        const { compact, expanded } = snapRef.current;
         const shouldExpand = g.dy < -50 || g.vy < -0.5;
-        const target = shouldExpand ? EXPANDED_TOP : COMPACT_TOP;
+        const target = shouldExpand ? expanded : compact;
         lastY.current = target;
         Animated.spring(sheetY, {
           toValue: target,
@@ -238,11 +244,16 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
               {distance ? ` · ${distance}` : ''}
             </Text>
 
-            <View style={styles.ratingLine}>
+            <Pressable
+              style={styles.ratingLine}
+              onPress={() => setActiveTab('Reviews')}
+              hitSlop={8}
+            >
               <Stars rating={venue.rating} />
               <Text style={styles.ratingNum}>{venue.rating.toFixed(1)}</Text>
+              <Ionicons name="chevron-forward" size={12} color="rgba(26,25,24,0.35)" style={{ marginLeft: -2 }} />
               <Text style={styles.priceText}>{priceLabel(venue.priceLevel)}</Text>
-            </View>
+            </Pressable>
 
             {/* Follow row */}
             <View style={styles.followRow}>
@@ -279,8 +290,8 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
               <ActionBtn icon="globe-outline" label="Website" disabled={!details?.website} onPress={openWebsite} />
             </View>
             <View style={styles.actionsRow}>
-              <ActionBtn icon="car-outline" label="Ride with Uber" onPress={openUber} />
-              <ActionBtn icon="car-sport-outline" label="Ride with Lyft" onPress={openLyft} />
+              <RideBtn brand="uber" onPress={openUber} />
+              <RideBtn brand="lyft" onPress={openLyft} />
             </View>
           </View>
 
@@ -356,6 +367,22 @@ function ActionBtn({
       <Text style={[actionStyles.label, disabled && actionStyles.labelDisabled]} numberOfLines={1}>
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+function RideBtn({ brand, onPress }: { brand: 'uber' | 'lyft'; onPress: () => void }) {
+  const isUber = brand === 'uber';
+  const bg = isUber ? '#000000' : '#FF00BF';
+  const label = isUber ? 'Uber' : 'Lyft';
+  const icon: keyof typeof Ionicons.glyphMap = isUber ? 'car-outline' : 'car-sport-outline';
+  return (
+    <Pressable
+      style={({ pressed }) => [rideStyles.btn, { backgroundColor: bg }, pressed && { opacity: 0.8 }]}
+      onPress={onPress}
+    >
+      <Ionicons name={icon} size={18} color="#ffffff" />
+      <Text style={rideStyles.label}>{label}</Text>
     </Pressable>
   );
 }
@@ -764,6 +791,24 @@ const actionStyles = StyleSheet.create({
   },
   labelDisabled: {
     color: 'rgba(26,25,24,0.35)',
+  },
+});
+
+const rideStyles = StyleSheet.create({
+  btn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  label: {
+    fontFamily: 'PlusJakartaSans_700Bold',
+    fontSize: 14,
+    color: '#ffffff',
+    letterSpacing: 0.3,
   },
 });
 

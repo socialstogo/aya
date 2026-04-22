@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, Platform, Text } from 'react-native';
+import { useState, useMemo } from 'react';
+import { View, StyleSheet, ActivityIndicator, Platform, Text, ScrollView, Pressable } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../lib/constants';
-import { Venue } from '../../lib/types';
+import { Venue, FilterType } from '../../lib/types';
 import { useVenues } from '../../hooks/useVenues';
+import { useLocation, distanceMi } from '../../hooks/useLocation';
 import VenueProfile from '../../components/VenueProfile';
 
 const MAP_PROVIDER = Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined;
@@ -15,6 +17,10 @@ const MIAMI = {
   longitudeDelta: 0.08,
 };
 
+const FILTERS: FilterType[] = ['All', 'Bar', 'Nightclub', 'Restaurant', 'Rooftop', 'Live Music'];
+const RADII = [0.5, 1, 2, 5, 10] as const;
+type Radius = typeof RADII[number];
+
 function crowdPin(crowd: number) {
   if (crowd >= 80) return '#ef4444';
   if (crowd >= 55) return '#f59e0b';
@@ -23,7 +29,22 @@ function crowdPin(crowd: number) {
 
 export default function MapScreen() {
   const { venues, loading } = useVenues();
+  const userCoords = useLocation();
+  const insets = useSafeAreaInsets();
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('All');
+  const [activeRadius, setActiveRadius] = useState<Radius>(5);
+  const [radiusOpen, setRadiusOpen] = useState(false);
+
+  const center = userCoords ?? { lat: MIAMI.latitude, lng: MIAMI.longitude };
+
+  const filtered = useMemo(() => {
+    return venues.filter((v) => {
+      const typeOk = activeFilter === 'All' || v.type === activeFilter;
+      const dist = distanceMi(center.lat, center.lng, v.lat, v.lng);
+      return typeOk && dist <= activeRadius;
+    });
+  }, [venues, activeFilter, activeRadius, center.lat, center.lng]);
 
   return (
     <View style={styles.container}>
@@ -35,7 +56,7 @@ export default function MapScreen() {
         showsUserLocation
         showsMyLocationButton={false}
       >
-        {venues.map((venue) => (
+        {filtered.map((venue) => (
           <Marker
             key={venue.id}
             coordinate={{ latitude: venue.lat, longitude: venue.lng }}
@@ -46,6 +67,50 @@ export default function MapScreen() {
           />
         ))}
       </MapView>
+
+      {/* Filter bar */}
+      <View style={[styles.filterBar, { top: insets.top + 12 }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContent}
+        >
+          {FILTERS.map((f) => (
+            <Pressable
+              key={f}
+              style={[styles.pill, activeFilter === f && styles.pillActive]}
+              onPress={() => setActiveFilter(f)}
+            >
+              <Text style={[styles.pillText, activeFilter === f && styles.pillTextActive]}>{f}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Radius selector */}
+      <View style={[styles.radiusWrap, { bottom: 110 + insets.bottom }]}>
+        {radiusOpen && (
+          <View style={styles.radiusMenu}>
+            {RADII.map((r) => (
+              <Pressable
+                key={r}
+                style={[styles.radiusItem, activeRadius === r && styles.radiusItemActive]}
+                onPress={() => {
+                  setActiveRadius(r);
+                  setRadiusOpen(false);
+                }}
+              >
+                <Text style={[styles.radiusItemText, activeRadius === r && styles.radiusItemTextActive]}>
+                  {r} mi
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <Pressable style={styles.radiusBtn} onPress={() => setRadiusOpen((o) => !o)}>
+          <Text style={styles.radiusBtnText}>{activeRadius} mi</Text>
+        </Pressable>
+      </View>
 
       {loading && (
         <View style={styles.loadingOverlay} pointerEvents="none">
@@ -72,6 +137,76 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  filterBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+  },
+  filterContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 100,
+    backgroundColor: 'rgba(13,12,10,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  pillActive: {
+    backgroundColor: COLORS.cream,
+    borderColor: COLORS.cream,
+  },
+  pillText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 13,
+    color: COLORS.cream,
+  },
+  pillTextActive: {
+    color: COLORS.background,
+  },
+  radiusWrap: {
+    position: 'absolute',
+    right: 14,
+    alignItems: 'flex-end',
+  },
+  radiusMenu: {
+    backgroundColor: 'rgba(13,12,10,0.92)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  radiusItem: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  radiusItemActive: {
+    backgroundColor: COLORS.cream,
+  },
+  radiusItemText: {
+    fontFamily: 'PlusJakartaSans_500Medium',
+    fontSize: 14,
+    color: COLORS.cream,
+  },
+  radiusItemTextActive: {
+    color: COLORS.background,
+  },
+  radiusBtn: {
+    backgroundColor: 'rgba(13,12,10,0.82)',
+    borderRadius: 100,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  radiusBtnText: {
+    fontFamily: 'PlusJakartaSans_600SemiBold',
+    fontSize: 13,
+    color: COLORS.cream,
   },
   loadingOverlay: {
     position: 'absolute',

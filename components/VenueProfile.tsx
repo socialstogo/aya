@@ -227,8 +227,9 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
         {/* Draggable white sheet */}
         <Animated.View style={[styles.sheet, { top: sheetY }]}>
 
-          {/* Drag handle */}
-          <View style={styles.handleWrap} {...panResponder.panHandlers}>
+          {/* Drag zone — handle pill + full header area */}
+          <View {...panResponder.panHandlers}>
+          <View style={styles.handleWrap}>
             <View style={styles.handle} />
           </View>
 
@@ -281,6 +282,7 @@ export default function VenueProfile({ venue, visible, onClose }: Props) {
               <StatChip label="status" value={venue.isOpen ? 'Open' : 'Closed'} />
             </View>
           </View>
+          </View>{/* end drag zone */}
 
           {/* Action buttons */}
           <View style={styles.actionsGrid}>

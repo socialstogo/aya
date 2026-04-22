@@ -37,12 +37,12 @@ const MOCK_STORIES = [
 ];
 
 const MENU_ITEMS = [
-  { id: 'profile',       label: 'My Profile',            icon: 'person-outline' },
-  { id: 'saved',         label: 'Saved Places',          icon: 'bookmark-outline' },
+  { id: 'profile',       label: 'My Profile',            icon: 'person-outline'        },
+  { id: 'saved',         label: 'Saved Places',          icon: 'bookmark-outline'      },
   { id: 'notifications', label: 'Notification Settings', icon: 'notifications-outline' },
-  { id: 'account',       label: 'Account Settings',      icon: 'settings-outline' },
-  { id: 'invite',        label: 'Invite Friends',        icon: 'people-outline' },
-  { id: 'help',          label: 'Help & Support',        icon: 'help-circle-outline' },
+  { id: 'account',       label: 'Account Settings',      icon: 'settings-outline'      },
+  { id: 'invite',        label: 'Invite Friends',        icon: 'people-outline'        },
+  { id: 'help',          label: 'Help & Support',        icon: 'help-circle-outline'   },
 ] as const;
 
 export default function DiscoverScreen() {
@@ -256,13 +256,13 @@ function ProfileMenu({
             ]}
             onPress={() => {
               onClose();
-              if (item.id === 'profile') {
-                router.push('/profile');
-              } else if (item.id === 'notifications') {
-                router.push('/notifications');
-              } else {
-                Alert.alert(item.label, 'Coming soon');
-              }
+              if (item.id === 'profile')       router.push('/profile');
+              else if (item.id === 'notifications') router.push('/notification-settings');
+              else if (item.id === 'saved')    router.push('/saved-places');
+              else if (item.id === 'account')  router.push('/account-settings');
+              else if (item.id === 'invite')   router.push('/invite');
+              else if (item.id === 'help')     router.push('/help');
+              else Alert.alert(item.label, 'Coming soon');
             }}
           >
             <Ionicons name={item.icon as any} size={20} color={COLORS.cream} />

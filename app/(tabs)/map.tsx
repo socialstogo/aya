@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, ActivityIndicator, Platform, Text, ScrollView, Pressable } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../lib/constants';
 import { Venue, FilterType } from '../../lib/types';
 import { useVenues } from '../../hooks/useVenues';
@@ -31,12 +32,23 @@ export default function MapScreen() {
   const { venues, loading } = useVenues();
   const userCoords = useLocation();
   const insets = useSafeAreaInsets();
+  const mapRef = useRef<MapView>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const [activeRadius, setActiveRadius] = useState<Radius>(5);
   const [radiusOpen, setRadiusOpen] = useState(false);
 
   const center = userCoords ?? { lat: MIAMI.latitude, lng: MIAMI.longitude };
+
+  function locateMe() {
+    const target = userCoords ?? { lat: MIAMI.latitude, lng: MIAMI.longitude };
+    mapRef.current?.animateToRegion({
+      latitude: target.lat,
+      longitude: target.lng,
+      latitudeDelta: 0.04,
+      longitudeDelta: 0.03,
+    }, 600);
+  }
 
   const filtered = useMemo(() => {
     return venues.filter((v) => {
@@ -49,6 +61,7 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={styles.map}
         provider={MAP_PROVIDER}
         initialRegion={MIAMI}
@@ -86,6 +99,14 @@ export default function MapScreen() {
           ))}
         </ScrollView>
       </View>
+
+      {/* Locate me button */}
+      <Pressable
+        style={[styles.locateBtn, { bottom: 166 + insets.bottom }]}
+        onPress={locateMe}
+      >
+        <Ionicons name="locate" size={20} color={COLORS.cream} />
+      </Pressable>
 
       {/* Radius selector */}
       <View style={[styles.radiusWrap, { bottom: 110 + insets.bottom }]}>
@@ -207,6 +228,18 @@ const styles = StyleSheet.create({
     fontFamily: 'PlusJakartaSans_600SemiBold',
     fontSize: 13,
     color: COLORS.cream,
+  },
+  locateBtn: {
+    position: 'absolute',
+    right: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(13,12,10,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingOverlay: {
     position: 'absolute',

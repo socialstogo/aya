@@ -48,12 +48,12 @@ export function getPhotoUrl(ref: string, maxWidth = 800): string {
   return `${BASE}/photo?maxwidth=${maxWidth}&photoreference=${ref}&key=${GOOGLE_MAPS_API_KEY}`;
 }
 
-function mapType(types: string[]): string {
+function mapType(types: string[]): string | null {
   if (types.includes('night_club')) return 'Nightclub';
   if (types.includes('bar')) return 'Bar';
   if (types.includes('restaurant')) return 'Restaurant';
-  if (types.includes('lodging')) return 'Lounge';
-  return 'Bar';
+  // Anything else (hotel, lodging, office, etc.) — skip it
+  return null;
 }
 
 function extractNeighborhood(vicinity: string): string {
@@ -74,7 +74,7 @@ interface GooglePlace {
 }
 
 export function mapPlaceToVenue(place: GooglePlace): Venue {
-  const vType = mapType(place.types);
+  const vType = mapType(place.types) ?? 'Bar';
   const crowd = crowdForNow(place.place_id, vType);
   const rawWait = waitForNow(place.place_id, crowd);
 
@@ -138,10 +138,10 @@ export async function fetchNearbyVenues(lat: number, lng: number): Promise<Venue
   const venues: Venue[] = [];
 
   for (const place of [...bars, ...clubs, ...restaurants]) {
-    if (!seen.has(place.place_id)) {
-      seen.add(place.place_id);
-      venues.push(mapPlaceToVenue(place));
-    }
+    const vType = mapType(place.types);
+    if (!vType || seen.has(place.place_id)) continue;
+    seen.add(place.place_id);
+    venues.push(mapPlaceToVenue(place));
   }
 
   cache[key] = { venues, at: Date.now() };

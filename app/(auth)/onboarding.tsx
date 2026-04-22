@@ -71,18 +71,25 @@ export default function OnboardingScreen() {
       }
     }
 
+    // Core update — only columns guaranteed to exist in the schema
     const { error } = await supabase
       .from('users')
       .update({
         avatar_color: avatarColor,
-        avatar_url: avatarUrl,
         venue_types: selectedVenueTypes,
         neighborhoods: selectedNeighborhoods,
-        instagram_handle: instagram.replace(/^@/, ''),
-        tiktok_handle: tiktok.replace(/^@/, ''),
         onboarding_complete: true,
       })
       .eq('id', user.id);
+
+    // Optional columns — silently ignored if columns don't exist yet
+    if (!error) {
+      await supabase.from('users').update({
+        ...(avatarUrl  ? { avatar_url: avatarUrl }                             : {}),
+        ...(instagram  ? { instagram_handle: instagram.replace(/^@/, '') }     : {}),
+        ...(tiktok     ? { tiktok_handle:    tiktok.replace(/^@/, '')    }     : {}),
+      }).eq('id', user.id).then(() => {}); // ignore error
+    }
 
     setLoading(false);
     if (error) Alert.alert('Error', error.message);
